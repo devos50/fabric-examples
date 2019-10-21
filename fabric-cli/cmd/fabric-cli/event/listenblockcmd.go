@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/securekey/fabric-examples/fabric-cli/action"
 	cliconfig "github.com/securekey/fabric-examples/fabric-cli/config"
+	fabriccmn "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/common"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -80,8 +81,30 @@ func (a *listenBlockAction) invoke() error {
 			if !ok {
 				return errors.WithMessage(err, "unexpected closed channel while waiting for block event")
 			}
-			a.Printer().PrintBlock(event.Block)
-			fmt.Println("Press <enter> to terminate")
+
+			var txs = 0
+
+			// determine transactions in block
+			block := event.Block
+			for i := range block.Data.Data {
+				envelope := ExtractEnvelopeOrPanic(block, i)
+				payload := ExtractPayloadOrPanic(envelope)
+
+				chdr, err := UnmarshalChannelHeader(payload.Header.ChannelHeader)
+				if err != nil {
+					panic(err)
+				}
+
+				if fabriccmn.HeaderType(chdr.Type) == fabriccmn.HeaderType_ENDORSER_TRANSACTION {
+					_, err := GetTransaction(data)
+					if err != nil {
+						panic(errors.Errorf("Bad envelope: %v", err))
+					}
+					txs++
+				}
+			}
+
+			fmt.Println(txs)
 		}
 	}
 }
