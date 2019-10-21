@@ -8,10 +8,12 @@ package event
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/event"
 	"github.com/pkg/errors"
 	"github.com/securekey/fabric-examples/fabric-cli/action"
+        "github.com/securekey/fabric-examples/fabric-cli/printer"
 	cliconfig "github.com/securekey/fabric-examples/fabric-cli/config"
 	fabriccmn "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/common"
 	"github.com/spf13/cobra"
@@ -64,7 +66,8 @@ func (a *listenBlockAction) invoke() error {
 		return err
 	}
 
-	fmt.Printf("Registering block event\n")
+	//fmt.Printf("Registering block event\n")
+	//f, err := os.Create("blocks.txt")
 
 	breg, beventch, err := eventClient.RegisterBlockEvent()
 	if err != nil {
@@ -76,27 +79,29 @@ func (a *listenBlockAction) invoke() error {
 	for {
 		select {
 		case _, _ = <-enterch:
-			return nil
+			//fmt.Printf("Done, got enter")
+			//return nil
 		case event, ok := <-beventch:
 			if !ok {
 				return errors.WithMessage(err, "unexpected closed channel while waiting for block event")
 			}
 
 			var txs = 0
+			var curTime = time.Now().UnixNano() / (int64(time.Millisecond)/int64(time.Nanosecond))
 
 			// determine transactions in block
 			block := event.Block
 			for i := range block.Data.Data {
-				envelope := ExtractEnvelopeOrPanic(block, i)
-				payload := ExtractPayloadOrPanic(envelope)
+				envelope := printer.ExtractEnvelopeOrPanic(block, i)
+				payload := printer.ExtractPayloadOrPanic(envelope)
 
-				chdr, err := UnmarshalChannelHeader(payload.Header.ChannelHeader)
+				chdr, err := printer.UnmarshalChannelHeader(payload.Header.ChannelHeader)
 				if err != nil {
 					panic(err)
 				}
 
 				if fabriccmn.HeaderType(chdr.Type) == fabriccmn.HeaderType_ENDORSER_TRANSACTION {
-					_, err := GetTransaction(data)
+					_, err := printer.GetTransaction(payload.Data)
 					if err != nil {
 						panic(errors.Errorf("Bad envelope: %v", err))
 					}
@@ -104,7 +109,13 @@ func (a *listenBlockAction) invoke() error {
 				}
 			}
 
-			fmt.Println(txs)
+			fmt.Printf("%d", block.Header.Number)
+			fmt.Printf(",")
+			fmt.Printf("%d", curTime)
+			fmt.Printf(",")
+			fmt.Printf("%d", txs)
+			fmt.Printf("\n")
+			//f.Sync()
 		}
 	}
 }
